@@ -37,6 +37,20 @@ export async function POST() {
 
     if (opponent) {
       try {
+        // Atomically claim both players by deleting from queue first
+        // This prevents duplicate matches when multiple ticks run concurrently
+        const { data: claimed } = await supabase
+          .from('matchmaking_queue')
+          .delete()
+          .in('user_id', [player.user_id, opponent.user_id])
+          .select();
+
+        // Only proceed if we claimed exactly 2 players
+        if (!claimed || claimed.length !== 2) {
+          // Another tick already claimed one/both players, skip
+          continue;
+        }
+
         // Fetch questions for the match
         const questions = await fetchQuestions(10);
 
@@ -64,14 +78,13 @@ export async function POST() {
 
         if (matchError) {
           console.error('Failed to create match:', matchError);
+          // Re-add players to queue since match creation failed
+          await supabase.from('matchmaking_queue').insert([
+            { user_id: player.user_id, mmr: player.mmr },
+            { user_id: opponent.user_id, mmr: opponent.mmr },
+          ]);
           continue;
         }
-
-        // Remove both from queue
-        await supabase
-          .from('matchmaking_queue')
-          .delete()
-          .in('user_id', [player.user_id, opponent.user_id]);
 
         matched.add(player.user_id);
         matched.add(opponent.user_id);
