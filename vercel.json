@@ -1,0 +1,6 @@
+{
+  "crons": [{
+    "path": "/api/matchmaking/tick",
+    "schedule": "* * * * *"
+  }]
+}
