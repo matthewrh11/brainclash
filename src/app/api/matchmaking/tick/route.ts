@@ -64,7 +64,7 @@ export async function POST() {
           .single();
 
         // Fetch questions scaled to average MMR
-        const avgMMR = Math.round(((p1?.mmr ?? 1000) + (p2?.mmr ?? 1000)) / 2);
+        const avgMMR = Math.round(((p1?.mmr ?? 500) + (p2?.mmr ?? 500)) / 2);
         const questions = await fetchQuestions(10, null, avgMMR);
 
         // Create match
@@ -73,8 +73,8 @@ export async function POST() {
           player_two_id: opponent.user_id,
           status: 'active',
           questions,
-          p1_mmr_before: p1?.mmr ?? 1000,
-          p2_mmr_before: p2?.mmr ?? 1000,
+          p1_mmr_before: p1?.mmr ?? 500,
+          p2_mmr_before: p2?.mmr ?? 500,
         });
 
         if (matchError) {

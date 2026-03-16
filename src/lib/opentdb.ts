@@ -35,6 +35,7 @@ export function decodeQuestion(q: OpenTDBQuestion): OpenTDBQuestion {
  * Lower MMR = more easy questions, higher MMR = more hard questions.
  */
 export function getDifficultyMix(avgMMR: number): { easy: number; medium: number; hard: number } {
+  if (avgMMR < 600)  return { easy: 8, medium: 2, hard: 0 };
   if (avgMMR < 900)  return { easy: 6, medium: 3, hard: 1 };
   if (avgMMR < 1100) return { easy: 4, medium: 4, hard: 2 };
   if (avgMMR < 1300) return { easy: 2, medium: 5, hard: 3 };
