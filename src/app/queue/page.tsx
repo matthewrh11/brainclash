@@ -43,6 +43,9 @@ export default function QueuePage() {
     }, 1000);
 
     pollRef.current = setInterval(async () => {
+      // Trigger matchmaking tick while waiting
+      fetch('/api/matchmaking/tick', { method: 'POST' }).catch(() => {});
+
       const statusRes = await fetch('/api/queue/status');
       const statusData = await statusRes.json();
 
