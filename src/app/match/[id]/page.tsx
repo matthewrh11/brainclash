@@ -25,6 +25,8 @@ export default function MatchPage() {
   const forfeitedRef = useRef(false);
   const submittedRef = useRef(false);
   const lastQuestionRef = useRef(-1);
+  const consecutiveTimeoutsRef = useRef(0);
+  const INACTIVITY_LIMIT = 2;
 
   useEffect(() => { forfeitedRef.current = forfeited; }, [forfeited]);
   useEffect(() => { submittedRef.current = submitted; }, [submitted]);
@@ -92,34 +94,77 @@ export default function MatchPage() {
     }
   }, [match, currentUser, matchId]);
 
-  // Realtime
+  // Realtime with resilient connection
   useEffect(() => {
+    let reconnectTimer: NodeJS.Timeout | null = null;
+    let refreshTimer: NodeJS.Timeout | null = null;
+
+    function handlePayload(payload: { new: unknown }) {
+      const newMatch = payload.new as unknown as Match;
+      // Only start transition when the question actually advances
+      if (!forfeitedRef.current && newMatch.current_question !== lastQuestionRef.current) {
+        // If the player hasn't submitted yet (timeout on their side), auto-mark as wrong
+        if (!submittedRef.current) {
+          setSubmitted(true);
+          submittedRef.current = true;
+          setLastResult(false);
+          setSelectedAnswer('__timeout__');
+        }
+        // Queue the new match state and start the 3-second review period
+        setPendingMatch(newMatch);
+        setBetweenQuestions(true);
+        setCountdown(3);
+      } else {
+        // Score update or other non-question-advance change
+        setMatch(newMatch);
+      }
+    }
+
     const channel = supabase
-      .channel(`match:${matchId}`)
+      .channel(`match:${matchId}`, {
+        config: { broadcast: { self: true } },
+      })
       .on('postgres_changes', {
         event: 'UPDATE', schema: 'public', table: 'matches', filter: `id=eq.${matchId}`,
-      }, (payload) => {
-        const newMatch = payload.new as unknown as Match;
-        // Only start transition when the question actually advances
-        if (!forfeitedRef.current && newMatch.current_question !== lastQuestionRef.current) {
-          // If the player hasn't submitted yet (timeout on their side), auto-mark as wrong
+      }, handlePayload)
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR') {
+          // Auto-reconnect after a brief delay
+          reconnectTimer = setTimeout(() => {
+            supabase.removeChannel(channel);
+            // Re-subscribing will be handled by the effect re-running
+          }, 2000);
+        }
+      });
+
+    // Periodically poll match state as a fallback in case realtime drops silently
+    refreshTimer = setInterval(async () => {
+      const { data } = await supabase
+        .from('matches').select('*').eq('id', matchId).single();
+      if (data) {
+        const freshMatch = data as unknown as Match;
+        // Apply the same logic as realtime updates
+        if (!forfeitedRef.current && freshMatch.current_question !== lastQuestionRef.current) {
           if (!submittedRef.current) {
             setSubmitted(true);
             submittedRef.current = true;
             setLastResult(false);
             setSelectedAnswer('__timeout__');
           }
-          // Queue the new match state and start the 3-second review period
-          setPendingMatch(newMatch);
+          setPendingMatch(freshMatch);
           setBetweenQuestions(true);
           setCountdown(3);
         } else {
-          // Score update or other non-question-advance change
-          setMatch(newMatch);
+          setMatch(freshMatch);
         }
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
+      }
+    }, 5000);
+
+    return () => {
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (refreshTimer) clearInterval(refreshTimer);
+      supabase.removeChannel(channel);
+    };
   }, [matchId, supabase]);
 
   // Between-questions countdown
@@ -168,6 +213,17 @@ export default function MatchPage() {
     setSubmitted(true);
     setSelectedAnswer(answer);
 
+    // Track consecutive timeouts for inactivity forfeit
+    if (answer === '__timeout__') {
+      consecutiveTimeoutsRef.current += 1;
+      if (consecutiveTimeoutsRef.current >= INACTIVITY_LIMIT) {
+        forfeitMatch();
+        return;
+      }
+    } else {
+      consecutiveTimeoutsRef.current = 0;
+    }
+
     const res = await fetch(`/api/match/${matchId}/answer`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -175,7 +231,7 @@ export default function MatchPage() {
     });
     const data = await res.json();
     if (res.ok) setLastResult(data.isCorrect);
-  }, [match, currentUser, matchId]);
+  }, [match, currentUser, matchId, forfeitMatch]);
 
   // Loading
   if (!match || !currentUser) {
@@ -208,7 +264,9 @@ export default function MatchPage() {
           </div>
           <h1 className="text-2xl font-bold text-red-400">Forfeited</h1>
           <p className="text-gray-500 text-sm">
-            Switching tabs or apps during a match is not allowed.
+            {consecutiveTimeoutsRef.current >= INACTIVITY_LIMIT
+              ? 'You were forfeited for inactivity (missed 2 consecutive questions).'
+              : 'Switching tabs or apps during a match is not allowed.'}
           </p>
           <button
             onClick={() => router.push('/')}
