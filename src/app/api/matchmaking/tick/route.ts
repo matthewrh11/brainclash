@@ -51,9 +51,6 @@ export async function POST() {
           continue;
         }
 
-        // Fetch questions for the match
-        const questions = await fetchQuestions(10);
-
         // Get both players' MMR
         const { data: p1 } = await supabase
           .from('users')
@@ -65,6 +62,10 @@ export async function POST() {
           .select('mmr')
           .eq('id', opponent.user_id)
           .single();
+
+        // Fetch questions scaled to average MMR
+        const avgMMR = Math.round(((p1?.mmr ?? 1000) + (p2?.mmr ?? 1000)) / 2);
+        const questions = await fetchQuestions(10, null, avgMMR);
 
         // Create match
         const { error: matchError } = await supabase.from('matches').insert({
