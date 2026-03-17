@@ -94,78 +94,72 @@ export default function MatchPage() {
     }
   }, [match, currentUser, matchId]);
 
+  // Shared handler for processing match updates (realtime or poll)
+  const handleMatchUpdate = useCallback((newMatch: Match) => {
+    if (!forfeitedRef.current && newMatch.current_question !== lastQuestionRef.current) {
+      if (!submittedRef.current) {
+        setSubmitted(true);
+        submittedRef.current = true;
+        setLastResult(false);
+        setSelectedAnswer('__timeout__');
+      }
+      setPendingMatch(newMatch);
+      setBetweenQuestions(true);
+      setCountdown(3);
+    } else {
+      setMatch(newMatch);
+    }
+  }, []);
+
   // Realtime with resilient connection
   useEffect(() => {
-    let reconnectTimer: NodeJS.Timeout | null = null;
+    let destroyed = false;
+    let activeChannel: ReturnType<typeof supabase.channel> | null = null;
     let refreshTimer: NodeJS.Timeout | null = null;
+    let reconnectTimer: NodeJS.Timeout | null = null;
 
-    function handlePayload(payload: { new: unknown }) {
-      const newMatch = payload.new as unknown as Match;
-      // Only start transition when the question actually advances
-      if (!forfeitedRef.current && newMatch.current_question !== lastQuestionRef.current) {
-        // If the player hasn't submitted yet (timeout on their side), auto-mark as wrong
-        if (!submittedRef.current) {
-          setSubmitted(true);
-          submittedRef.current = true;
-          setLastResult(false);
-          setSelectedAnswer('__timeout__');
-        }
-        // Queue the new match state and start the 3-second review period
-        setPendingMatch(newMatch);
-        setBetweenQuestions(true);
-        setCountdown(3);
-      } else {
-        // Score update or other non-question-advance change
-        setMatch(newMatch);
-      }
+    function subscribe() {
+      if (destroyed) return;
+
+      const channel = supabase
+        .channel(`match:${matchId}:${Date.now()}`)
+        .on('postgres_changes', {
+          event: 'UPDATE', schema: 'public', table: 'matches', filter: `id=eq.${matchId}`,
+        }, (payload) => {
+          handleMatchUpdate(payload.new as unknown as Match);
+        })
+        .subscribe((status) => {
+          if (destroyed) return;
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            // Clean up failed channel and retry
+            supabase.removeChannel(channel);
+            activeChannel = null;
+            reconnectTimer = setTimeout(subscribe, 2000);
+          }
+          if (status === 'SUBSCRIBED') {
+            activeChannel = channel;
+          }
+        });
     }
 
-    const channel = supabase
-      .channel(`match:${matchId}`, {
-        config: { broadcast: { self: true } },
-      })
-      .on('postgres_changes', {
-        event: 'UPDATE', schema: 'public', table: 'matches', filter: `id=eq.${matchId}`,
-      }, handlePayload)
-      .subscribe((status) => {
-        if (status === 'CHANNEL_ERROR') {
-          // Auto-reconnect after a brief delay
-          reconnectTimer = setTimeout(() => {
-            supabase.removeChannel(channel);
-            // Re-subscribing will be handled by the effect re-running
-          }, 2000);
-        }
-      });
+    subscribe();
 
-    // Periodically poll match state as a fallback in case realtime drops silently
+    // Fallback poll every 3 seconds to catch silent disconnects
     refreshTimer = setInterval(async () => {
       const { data } = await supabase
         .from('matches').select('*').eq('id', matchId).single();
       if (data) {
-        const freshMatch = data as unknown as Match;
-        // Apply the same logic as realtime updates
-        if (!forfeitedRef.current && freshMatch.current_question !== lastQuestionRef.current) {
-          if (!submittedRef.current) {
-            setSubmitted(true);
-            submittedRef.current = true;
-            setLastResult(false);
-            setSelectedAnswer('__timeout__');
-          }
-          setPendingMatch(freshMatch);
-          setBetweenQuestions(true);
-          setCountdown(3);
-        } else {
-          setMatch(freshMatch);
-        }
+        handleMatchUpdate(data as unknown as Match);
       }
-    }, 5000);
+    }, 3000);
 
     return () => {
+      destroyed = true;
       if (reconnectTimer) clearTimeout(reconnectTimer);
       if (refreshTimer) clearInterval(refreshTimer);
-      supabase.removeChannel(channel);
+      if (activeChannel) supabase.removeChannel(activeChannel);
     };
-  }, [matchId, supabase]);
+  }, [matchId, supabase, handleMatchUpdate]);
 
   // Between-questions countdown
   useEffect(() => {

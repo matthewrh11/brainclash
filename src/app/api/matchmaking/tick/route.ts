@@ -5,6 +5,13 @@ import { NextResponse } from 'next/server';
 export async function POST() {
   const supabase = createServiceRoleClient();
 
+  // Purge stale queue entries (older than 5 minutes = likely dead sessions)
+  const staleThreshold = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+  await supabase
+    .from('matchmaking_queue')
+    .delete()
+    .lt('queued_at', staleThreshold);
+
   const { data: queue, error: queueError } = await supabase
     .from('matchmaking_queue')
     .select('*')

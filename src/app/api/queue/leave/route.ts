@@ -2,7 +2,16 @@ import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
+// POST handler for navigator.sendBeacon (which only sends POST)
+export async function POST() {
+  return handleLeave();
+}
+
 export async function DELETE() {
+  return handleLeave();
+}
+
+async function handleLeave() {
   const cookieStore = cookies();
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

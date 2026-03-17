@@ -12,13 +12,47 @@ export default function QueuePage() {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const router = useRouter();
 
+  const queuedRef = useRef(false);
+
   const cleanup = useCallback(() => {
     if (pollRef.current) clearInterval(pollRef.current);
     if (timerRef.current) clearInterval(timerRef.current);
   }, []);
 
+  // Auto-leave queue on tab close, navigation, or disconnect
   useEffect(() => {
-    return cleanup;
+    function handleBeforeUnload() {
+      if (queuedRef.current) {
+        // sendBeacon is fire-and-forget — works even as the page is closing
+        navigator.sendBeacon('/api/queue/leave');
+      }
+    }
+
+    function handleVisibilityChange() {
+      // If user switches away on mobile (e.g. swipes home), leave queue
+      // to avoid ghost entries. They can re-join when they come back.
+      if (document.hidden && queuedRef.current) {
+        navigator.sendBeacon('/api/queue/leave');
+        cleanup();
+        queuedRef.current = false;
+        setStatus('idle');
+        setWaitTime(0);
+      }
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      // Component unmount (navigation away) — leave queue
+      if (queuedRef.current) {
+        fetch('/api/queue/leave', { method: 'DELETE' }).catch(() => {});
+        queuedRef.current = false;
+      }
+      cleanup();
+    };
   }, [cleanup]);
 
   async function joinQueue() {
@@ -37,6 +71,7 @@ export default function QueuePage() {
 
     setStatus('queued');
     setWaitTime(0);
+    queuedRef.current = true;
 
     timerRef.current = setInterval(() => {
       setWaitTime((t) => t + 1);
@@ -51,6 +86,7 @@ export default function QueuePage() {
 
       if (statusData.status === 'matched') {
         cleanup();
+        queuedRef.current = false;
         setStatus('matched');
         router.push(`/match/${statusData.matchId}`);
       }
@@ -59,6 +95,7 @@ export default function QueuePage() {
 
   async function leaveQueue() {
     cleanup();
+    queuedRef.current = false;
     await fetch('/api/queue/leave', { method: 'DELETE' });
     setStatus('idle');
     setWaitTime(0);
