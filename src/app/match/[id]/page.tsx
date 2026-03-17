@@ -26,6 +26,7 @@ export default function MatchPage() {
   const submittedRef = useRef(false);
   const lastQuestionRef = useRef(-1);
   const consecutiveTimeoutsRef = useRef(0);
+  const betweenQuestionsRef = useRef(false);
   const INACTIVITY_LIMIT = 2;
 
   useEffect(() => { forfeitedRef.current = forfeited; }, [forfeited]);
@@ -97,12 +98,16 @@ export default function MatchPage() {
   // Shared handler for processing match updates (realtime or poll)
   const handleMatchUpdate = useCallback((newMatch: Match) => {
     if (!forfeitedRef.current && newMatch.current_question !== lastQuestionRef.current) {
+      // Don't reset the countdown if we're already in the between-questions period
+      if (betweenQuestionsRef.current) return;
+
       if (!submittedRef.current) {
         setSubmitted(true);
         submittedRef.current = true;
         setLastResult(false);
         setSelectedAnswer('__timeout__');
       }
+      betweenQuestionsRef.current = true;
       setPendingMatch(newMatch);
       setBetweenQuestions(true);
       setCountdown(3);
@@ -171,6 +176,7 @@ export default function MatchPage() {
           clearInterval(timer);
           // Apply the pending match state and reset for next question
           lastQuestionRef.current = pendingMatch.current_question;
+          betweenQuestionsRef.current = false;
           setMatch(pendingMatch);
           setPendingMatch(null);
           setBetweenQuestions(false);
