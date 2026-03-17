@@ -26,7 +26,8 @@ function formatTime(ms: number): string {
 }
 
 export default function DailyPage() {
-  const [phase, setPhase] = useState<'loading' | 'ready' | 'playing' | 'results'>('loading');
+  const [phase, setPhase] = useState<'loading' | 'ready' | 'playing' | 'results' | 'error'>('loading');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [challengeId, setChallengeId] = useState<string | null>(null);
   const [questions, setQuestions] = useState<DailyQuestion[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState(0);
@@ -42,6 +43,7 @@ export default function DailyPage() {
   const [betweenQuestions, setBetweenQuestions] = useState(false);
   const [countdown, setCountdown] = useState(3);
   const [showCopied, setShowCopied] = useState(false);
+  const [lastResult, setLastResult] = useState<boolean | null>(null);
 
   const questionStartRef = useRef(Date.now());
   const submittedRef = useRef(false);
@@ -59,8 +61,10 @@ export default function DailyPage() {
       const res = await fetch('/api/daily/today');
       const data = await res.json();
 
-      if (data.error) {
-        console.error(data.error);
+      if (!res.ok || data.error) {
+        console.error('Daily challenge error:', data.error);
+        setErrorMsg(data.error || 'Failed to load daily challenge');
+        setPhase('error');
         return;
       }
 
@@ -114,6 +118,7 @@ export default function DailyPage() {
       setCurrentQuestion((q) => q + 1);
       setSelectedAnswer(null);
       setSubmitted(false);
+      setLastResult(null);
       submittedRef.current = false;
       setTimeLeft(20);
       questionStartRef.current = Date.now();
@@ -132,6 +137,8 @@ export default function DailyPage() {
 
     const timeMs = Date.now() - questionStartRef.current;
     const isTimeout = answer === '__timeout__';
+    const isCorrect = !isTimeout && answer === question?.correct_answer;
+    setLastResult(isTimeout ? false : isCorrect);
 
     const newAnswer: DailyAnswer = {
       question_index: currentQuestion,
@@ -218,6 +225,25 @@ export default function DailyPage() {
     );
   }
 
+  // Error state
+  if (phase === 'error') {
+    return (
+      <div className="min-h-screen">
+        <Navbar />
+        <main className="max-w-2xl mx-auto px-4 py-12 text-center">
+          <h1 className="text-2xl font-bold text-red-400 mb-4">Something went wrong</h1>
+          <p className="text-gray-400 mb-6">{errorMsg}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-6 py-3 glass rounded-xl font-semibold hover:bg-white/10 transition-all"
+          >
+            Try Again
+          </button>
+        </main>
+      </div>
+    );
+  }
+
   // Ready to play
   if (phase === 'ready') {
     return (
@@ -250,9 +276,9 @@ export default function DailyPage() {
   // Results
   if (phase === 'results' && result) {
     return (
-      <div className="min-h-screen">
+      <div className="min-h-screen overflow-y-auto">
         <Navbar />
-        <main className="max-w-2xl mx-auto px-4 py-6 sm:py-12 animate-fade-in-up">
+        <main className="max-w-2xl mx-auto px-4 py-6 sm:py-12 pb-16 animate-fade-in-up">
           <div className="text-center mb-8">
             <div className="text-sm text-gray-500 uppercase tracking-wider font-medium mb-2">
               {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
@@ -438,24 +464,55 @@ export default function DailyPage() {
             </h2>
 
             {/* Answers */}
-            <div className="space-y-3">
+            <div className="grid grid-cols-1 gap-2 sm:gap-2.5">
               {shuffledAnswers.map((answer, i) => {
                 const isSelected = selectedAnswer === answer;
+                const isCorrectAnswer = answer === question.correct_answer;
+                const showResults = submitted && lastResult !== null;
+
+                let btnClass = 'relative w-full text-left p-3.5 sm:p-4 rounded-xl transition-all text-sm sm:text-base font-medium ';
+
+                if (showResults) {
+                  if (isCorrectAnswer) {
+                    btnClass += 'bg-green-500/15 ring-1 ring-green-500/40 text-green-300';
+                  } else if (isSelected && !lastResult) {
+                    btnClass += 'bg-red-500/15 ring-1 ring-red-500/40 text-red-300';
+                  } else {
+                    btnClass += 'bg-white/[0.02] ring-1 ring-gray-800/50 text-gray-600';
+                  }
+                } else if (submitted) {
+                  if (isSelected) {
+                    btnClass += 'bg-blue-500/15 ring-1 ring-blue-500/40 text-blue-300 animate-pulse';
+                  } else {
+                    btnClass += 'bg-white/[0.02] ring-1 ring-gray-800/50 text-gray-600';
+                  }
+                } else {
+                  btnClass += 'bg-white/[0.03] ring-1 ring-gray-800 text-white hover:bg-white/[0.07] hover:ring-gray-700 active:bg-white/10 active:scale-[0.98] cursor-pointer';
+                }
+
                 return (
                   <button
                     key={i}
                     onClick={() => !submitted && handleSubmit(answer)}
                     disabled={submitted}
-                    className={`w-full text-left p-4 rounded-xl transition-all text-sm sm:text-base ${
-                      submitted && isSelected
-                        ? 'glass ring-2 ring-blue-500 bg-blue-500/10'
-                        : submitted
-                        ? 'glass opacity-50'
-                        : 'glass hover:bg-white/10 active:bg-white/15 hover:ring-1 hover:ring-gray-600'
-                    }`}
+                    className={btnClass}
                   >
                     <span className="text-gray-400 mr-3 font-mono text-sm">{String.fromCharCode(65 + i)}</span>
                     {answer}
+                    {showResults && isCorrectAnswer && (
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2">
+                        <svg className="w-5 h-5 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                        </svg>
+                      </span>
+                    )}
+                    {showResults && isSelected && !lastResult && (
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2">
+                        <svg className="w-5 h-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </span>
+                    )}
                   </button>
                 );
               })}

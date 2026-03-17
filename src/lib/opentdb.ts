@@ -1,23 +1,32 @@
 import { OpenTDBQuestion, OpenTDBResponse } from '@/types/database';
 
 export function decodeHTML(str: string): string {
+  // Handle numeric entities (&#039; &#x27; etc.)
+  let result = str.replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)));
+  result = result.replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+
+  // Handle named entities
   const entities: Record<string, string> = {
-    '&amp;': '&',
-    '&lt;': '<',
-    '&gt;': '>',
-    '&quot;': '"',
-    '&#039;': "'",
-    '&apos;': "'",
-    '&laquo;': '«',
-    '&raquo;': '»',
-    '&nbsp;': ' ',
-    '&eacute;': 'é',
-    '&Eacute;': 'É',
-    '&ouml;': 'ö',
-    '&uuml;': 'ü',
-    '&szlig;': 'ß',
+    '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&apos;': "'",
+    '&nbsp;': ' ', '&laquo;': '«', '&raquo;': '»',
+    '&agrave;': 'à', '&aacute;': 'á', '&acirc;': 'â', '&atilde;': 'ã', '&auml;': 'ä', '&aring;': 'å',
+    '&Agrave;': 'À', '&Aacute;': 'Á', '&Acirc;': 'Â', '&Atilde;': 'Ã', '&Auml;': 'Ä', '&Aring;': 'Å',
+    '&egrave;': 'è', '&eacute;': 'é', '&ecirc;': 'ê', '&euml;': 'ë',
+    '&Egrave;': 'È', '&Eacute;': 'É', '&Ecirc;': 'Ê', '&Euml;': 'Ë',
+    '&igrave;': 'ì', '&iacute;': 'í', '&icirc;': 'î', '&iuml;': 'ï',
+    '&Igrave;': 'Ì', '&Iacute;': 'Í', '&Icirc;': 'Î', '&Iuml;': 'Ï',
+    '&ograve;': 'ò', '&oacute;': 'ó', '&ocirc;': 'ô', '&otilde;': 'õ', '&ouml;': 'ö',
+    '&Ograve;': 'Ò', '&Oacute;': 'Ó', '&Ocirc;': 'Ô', '&Otilde;': 'Õ', '&Ouml;': 'Ö',
+    '&ugrave;': 'ù', '&uacute;': 'ú', '&ucirc;': 'û', '&uuml;': 'ü',
+    '&Ugrave;': 'Ù', '&Uacute;': 'Ú', '&Ucirc;': 'Û', '&Uuml;': 'Ü',
+    '&ntilde;': 'ñ', '&Ntilde;': 'Ñ', '&ccedil;': 'ç', '&Ccedil;': 'Ç',
+    '&szlig;': 'ß', '&eth;': 'ð', '&thorn;': 'þ',
+    '&ldquo;': '\u201C', '&rdquo;': '\u201D', '&lsquo;': '\u2018', '&rsquo;': '\u2019',
+    '&mdash;': '\u2014', '&ndash;': '\u2013', '&hellip;': '\u2026',
+    '&deg;': '°', '&micro;': 'µ', '&cent;': '¢', '&pound;': '£', '&euro;': '\u20AC',
+    '&shy;': '\u00AD', '&trade;': '\u2122', '&copy;': '©', '&reg;': '®',
   };
-  return str.replace(/&[^;]+;/g, (match) => entities[match] || match);
+  return result.replace(/&[a-zA-Z]+;/g, (match) => entities[match] || match);
 }
 
 export function decodeQuestion(q: OpenTDBQuestion): OpenTDBQuestion {
@@ -66,7 +75,8 @@ async function fetchByDifficulty(
 export async function fetchQuestions(
   amount: number = 10,
   token?: string | null,
-  avgMMR?: number
+  avgMMR?: number,
+  options?: { ordered?: boolean }
 ): Promise<OpenTDBQuestion[]> {
   // If MMR provided, fetch a difficulty mix
   if (avgMMR !== undefined) {
@@ -79,10 +89,12 @@ export async function fetchQuestions(
 
     const questions = [...easy, ...medium, ...hard];
 
-    // Shuffle so difficulties aren't grouped together
-    for (let i = questions.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [questions[i], questions[j]] = [questions[j], questions[i]];
+    // Shuffle so difficulties aren't grouped together (unless ordered requested)
+    if (!options?.ordered) {
+      for (let i = questions.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [questions[i], questions[j]] = [questions[j], questions[i]];
+      }
     }
 
     // If we got enough, return them; otherwise fall back to unfiltered

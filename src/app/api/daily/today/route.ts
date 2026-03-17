@@ -43,8 +43,8 @@ export async function GET() {
 
   // If no challenge exists for today, generate one
   if (!challenge) {
-    // Daily mix: 6 easy, 3 medium, 1 hard
-    const questions = await fetchQuestions(10, null, 800);
+    // Daily mix: 6 easy, 3 medium, 1 hard — ordered easy→medium→hard
+    const questions = await fetchQuestions(10, null, 800, { ordered: true });
 
     const { data: newChallenge, error } = await serviceSupabase
       .from('daily_challenges')
@@ -77,12 +77,11 @@ export async function GET() {
     .eq('user_id', user.id)
     .single();
 
-  // Strip correct answers if user hasn't played yet
+  // Pre-shuffle answers for display
   const questions = existingResult
     ? challenge.questions
     : (challenge.questions as { correct_answer: string; incorrect_answers: string[]; question: string; category: string; type: string; difficulty: string }[]).map((q) => ({
         ...q,
-        correct_answer: undefined,
         all_answers: [...q.incorrect_answers, q.correct_answer].sort(() => Math.random() - 0.5),
       }));
 
