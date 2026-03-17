@@ -276,7 +276,7 @@ export default function DailyPage() {
   // Results
   if (phase === 'results' && result) {
     return (
-      <div className="min-h-screen overflow-y-auto">
+      <div className="min-h-screen">
         <Navbar />
         <main className="max-w-2xl mx-auto px-4 py-6 sm:py-12 pb-16 animate-fade-in-up">
           <div className="text-center mb-8">

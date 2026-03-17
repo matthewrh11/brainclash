@@ -16,8 +16,8 @@ body {
   overscroll-behavior: none;
 }
 
-html, body {
-  overflow-x: hidden;
+body {
+  overflow-x: clip;
 }
 
 /* Safe area padding for notched devices */
