@@ -4,6 +4,8 @@ import { cookies } from 'next/headers';
 import { fetchQuestions } from '@/lib/opentdb';
 import { NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+
 function getTodayUTC(): string {
   return new Date().toISOString().split('T')[0];
 }
