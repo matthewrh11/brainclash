@@ -54,13 +54,19 @@ export default function HomePage() {
               <StatCard label="Played" value={profile.total_matches} color="blue" />
             </div>
 
-            {/* Play CTA */}
-            <div className="text-center">
+            {/* Play CTAs */}
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Link
                 href="/queue"
-                className="inline-block w-full sm:w-auto px-10 py-4 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 active:from-blue-700 active:to-blue-600 rounded-xl text-lg font-bold transition-all hover:shadow-xl hover:shadow-blue-500/20 hover:-translate-y-0.5 active:translate-y-0"
+                className="inline-block w-full sm:w-auto px-10 py-4 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 active:from-blue-700 active:to-blue-600 rounded-xl text-lg font-bold transition-all hover:shadow-xl hover:shadow-blue-500/20 hover:-translate-y-0.5 active:translate-y-0 text-center"
               >
-                Find Match
+                BrainClash Duel
+              </Link>
+              <Link
+                href="/daily"
+                className="inline-block w-full sm:w-auto px-10 py-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 active:from-purple-700 active:to-pink-700 rounded-xl text-lg font-bold transition-all hover:shadow-xl hover:shadow-purple-500/20 hover:-translate-y-0.5 active:translate-y-0 text-center"
+              >
+                BrainClash Daily
               </Link>
             </div>
 

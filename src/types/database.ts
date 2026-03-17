@@ -46,6 +46,30 @@ export interface MatchmakingQueue {
   queued_at: string;
 }
 
+export interface DailyChallenge {
+  id: string;
+  challenge_date: string;
+  questions: OpenTDBQuestion[];
+  created_at: string;
+}
+
+export interface DailyAnswer {
+  question_index: number;
+  answer: string;
+  is_correct: boolean;
+  time_ms: number;
+}
+
+export interface DailyResult {
+  id: string;
+  challenge_id: string;
+  user_id: string;
+  score: number;
+  total_time_ms: number;
+  answers: DailyAnswer[];
+  completed_at: string;
+}
+
 export interface OpenTDBQuestion {
   category: string;
   type: string;
@@ -82,6 +106,16 @@ export type Database = {
         Row: MatchmakingQueue;
         Insert: Omit<MatchmakingQueue, 'id' | 'queued_at'>;
         Update: Partial<MatchmakingQueue>;
+      };
+      daily_challenges: {
+        Row: DailyChallenge;
+        Insert: Omit<DailyChallenge, 'id' | 'created_at'>;
+        Update: Partial<DailyChallenge>;
+      };
+      daily_results: {
+        Row: DailyResult;
+        Insert: Omit<DailyResult, 'id' | 'completed_at'>;
+        Update: Partial<DailyResult>;
       };
     };
   };
