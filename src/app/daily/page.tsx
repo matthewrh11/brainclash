@@ -76,7 +76,7 @@ export default function DailyPage() {
         setFullQuestions(data.challenge.questions);
         setPhase('results');
         // Fetch leaderboard
-        const lbRes = await fetch('/api/daily/leaderboard');
+        const lbRes = await fetch(`/api/daily/leaderboard?challengeId=${data.challenge.id}`);
         const lbData = await lbRes.json();
         setLeaderboard(lbData.leaderboard ?? []);
       } else {
@@ -182,7 +182,7 @@ export default function DailyPage() {
       setTimeout(() => {
         setPhase('results');
         // Fetch leaderboard
-        fetch('/api/daily/leaderboard')
+        fetch(`/api/daily/leaderboard?challengeId=${challengeId}`)
           .then((r) => r.json())
           .then((d) => setLeaderboard(d.leaderboard ?? []));
       }, 1500);

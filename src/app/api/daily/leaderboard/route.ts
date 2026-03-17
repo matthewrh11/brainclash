@@ -3,33 +3,23 @@ import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
-function getTodayUTC(): string {
-  return new Date().toISOString().split('T')[0];
-}
-
-export async function GET() {
+export async function GET(request: Request) {
   const serviceSupabase = createServiceRoleClient();
-  const today = getTodayUTC();
+  const { searchParams } = new URL(request.url);
+  const challengeId = searchParams.get('challengeId');
 
-  // Get today's challenge
-  const { data: challenge } = await serviceSupabase
-    .from('daily_challenges')
-    .select('id')
-    .eq('challenge_date', today)
-    .single();
-
-  if (!challenge) {
+  if (!challengeId) {
     return NextResponse.json({ leaderboard: [] });
   }
 
-  // Get all results for today, sorted by score DESC then time ASC
+  // Get all results for this challenge, sorted by score DESC then time ASC
   const { data: results } = await serviceSupabase
     .from('daily_results')
     .select('user_id, score, total_time_ms, completed_at')
-    .eq('challenge_id', challenge.id)
+    .eq('challenge_id', challengeId)
     .order('score', { ascending: false })
     .order('total_time_ms', { ascending: true })
-    .limit(50);
+    .limit(10);
 
   if (!results || results.length === 0) {
     return NextResponse.json({ leaderboard: [] });
