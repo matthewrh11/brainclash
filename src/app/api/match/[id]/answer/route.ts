@@ -76,76 +76,89 @@ export async function POST(
     const p2Score = updatedMatch.p2_score as number;
     const playerOneId = updatedMatch.player_one_id as string;
     const playerTwoId = updatedMatch.player_two_id as string;
-    const p1MmrBefore = updatedMatch.p1_mmr_before as number;
-    const p2MmrBefore = updatedMatch.p2_mmr_before as number;
 
     let winnerId: string | null = null;
-    let p1MmrAfter: number;
-    let p2MmrAfter: number;
+    if (p1Score > p2Score) winnerId = playerOneId;
+    else if (p2Score > p1Score) winnerId = playerTwoId;
 
-    if (p1Score > p2Score) {
-      winnerId = playerOneId;
-      const elo = calculateElo(p1MmrBefore, p2MmrBefore);
-      p1MmrAfter = elo.winnerNew;
-      p2MmrAfter = elo.loserNew;
-    } else if (p2Score > p1Score) {
-      winnerId = playerTwoId;
-      const elo = calculateElo(p2MmrBefore, p1MmrBefore);
-      p1MmrAfter = elo.loserNew;
-      p2MmrAfter = elo.winnerNew;
-    } else {
-      const elo = calculateEloDraw(p1MmrBefore, p2MmrBefore);
-      p1MmrAfter = elo.player1New;
-      p2MmrAfter = elo.player2New;
-    }
+    // Check if this is a ranked match (casual matches skip Elo/stats)
+    const isRanked = (match as Record<string, unknown>).match_type !== 'casual';
 
-    // Update match with final results
-    await serviceSupabase
-      .from('matches')
-      .update({
-        winner_id: winnerId,
-        p1_mmr_after: p1MmrAfter,
-        p2_mmr_after: p2MmrAfter,
-      })
-      .eq('id', matchId);
+    if (isRanked) {
+      const p1MmrBefore = updatedMatch.p1_mmr_before as number;
+      const p2MmrBefore = updatedMatch.p2_mmr_before as number;
 
-    // Update player stats
-    if (winnerId) {
-      const loserId = winnerId === playerOneId ? playerTwoId : playerOneId;
-      const winnerNewMmr = winnerId === playerOneId ? p1MmrAfter : p2MmrAfter;
-      const loserNewMmr = loserId === playerOneId ? p1MmrAfter : p2MmrAfter;
+      let p1MmrAfter: number;
+      let p2MmrAfter: number;
 
-      const { data: winner } = await serviceSupabase
-        .from('users').select('wins, total_matches').eq('id', winnerId).single();
-      const { data: loser } = await serviceSupabase
-        .from('users').select('losses, total_matches').eq('id', loserId).single();
-
-      if (winner) {
-        await serviceSupabase.from('users').update({
-          mmr: winnerNewMmr,
-          wins: (winner as Record<string, unknown>).wins as number + 1,
-          total_matches: (winner as Record<string, unknown>).total_matches as number + 1,
-        }).eq('id', winnerId);
+      if (winnerId === playerOneId) {
+        const elo = calculateElo(p1MmrBefore, p2MmrBefore);
+        p1MmrAfter = elo.winnerNew;
+        p2MmrAfter = elo.loserNew;
+      } else if (winnerId === playerTwoId) {
+        const elo = calculateElo(p2MmrBefore, p1MmrBefore);
+        p1MmrAfter = elo.loserNew;
+        p2MmrAfter = elo.winnerNew;
+      } else {
+        const elo = calculateEloDraw(p1MmrBefore, p2MmrBefore);
+        p1MmrAfter = elo.player1New;
+        p2MmrAfter = elo.player2New;
       }
-      if (loser) {
-        await serviceSupabase.from('users').update({
-          mmr: loserNewMmr,
-          losses: (loser as Record<string, unknown>).losses as number + 1,
-          total_matches: (loser as Record<string, unknown>).total_matches as number + 1,
-        }).eq('id', loserId);
-      }
-    } else {
-      // Draw
-      for (const playerId of [playerOneId, playerTwoId]) {
-        const { data: player } = await serviceSupabase
-          .from('users').select('total_matches').eq('id', playerId).single();
-        if (player) {
+
+      // Update match with final results
+      await serviceSupabase
+        .from('matches')
+        .update({
+          winner_id: winnerId,
+          p1_mmr_after: p1MmrAfter,
+          p2_mmr_after: p2MmrAfter,
+        })
+        .eq('id', matchId);
+
+      // Update player stats
+      if (winnerId) {
+        const loserId = winnerId === playerOneId ? playerTwoId : playerOneId;
+        const winnerNewMmr = winnerId === playerOneId ? p1MmrAfter : p2MmrAfter;
+        const loserNewMmr = loserId === playerOneId ? p1MmrAfter : p2MmrAfter;
+
+        const { data: winner } = await serviceSupabase
+          .from('users').select('wins, total_matches').eq('id', winnerId).single();
+        const { data: loser } = await serviceSupabase
+          .from('users').select('losses, total_matches').eq('id', loserId).single();
+
+        if (winner) {
           await serviceSupabase.from('users').update({
-            mmr: playerId === playerOneId ? p1MmrAfter : p2MmrAfter,
-            total_matches: (player as Record<string, unknown>).total_matches as number + 1,
-          }).eq('id', playerId);
+            mmr: winnerNewMmr,
+            wins: (winner as Record<string, unknown>).wins as number + 1,
+            total_matches: (winner as Record<string, unknown>).total_matches as number + 1,
+          }).eq('id', winnerId);
+        }
+        if (loser) {
+          await serviceSupabase.from('users').update({
+            mmr: loserNewMmr,
+            losses: (loser as Record<string, unknown>).losses as number + 1,
+            total_matches: (loser as Record<string, unknown>).total_matches as number + 1,
+          }).eq('id', loserId);
+        }
+      } else {
+        // Draw
+        for (const playerId of [playerOneId, playerTwoId]) {
+          const { data: player } = await serviceSupabase
+            .from('users').select('total_matches').eq('id', playerId).single();
+          if (player) {
+            await serviceSupabase.from('users').update({
+              mmr: playerId === playerOneId ? p1MmrAfter : p2MmrAfter,
+              total_matches: (player as Record<string, unknown>).total_matches as number + 1,
+            }).eq('id', playerId);
+          }
         }
       }
+    } else {
+      // Casual match — just set the winner, no Elo or stats changes
+      await serviceSupabase
+        .from('matches')
+        .update({ winner_id: winnerId })
+        .eq('id', matchId);
     }
   }
 

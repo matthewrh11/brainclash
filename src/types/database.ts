@@ -1,4 +1,5 @@
 export type MatchStatus = 'waiting' | 'active' | 'completed' | 'abandoned';
+export type MatchType = 'ranked' | 'casual';
 
 export interface User {
   id: string;
@@ -25,6 +26,8 @@ export interface Match {
   p2_mmr_after: number | null;
   p1_score: number;
   p2_score: number;
+  match_type: MatchType;
+  invite_code: string | null;
   created_at: string;
   completed_at: string | null;
 }

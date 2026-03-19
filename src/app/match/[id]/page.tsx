@@ -283,6 +283,7 @@ export default function MatchPage() {
   if (match.status === 'completed') {
     const isWinner = match.winner_id === currentUser.id;
     const isDraw = match.winner_id === null;
+    const isCasual = match.match_type === 'casual';
     const myMmrBefore = isP1 ? match.p1_mmr_before : match.p2_mmr_before;
     const myMmrAfter = isP1 ? match.p1_mmr_after : match.p2_mmr_after;
     const mmrChange = (myMmrAfter ?? 0) - (myMmrBefore ?? 0);
@@ -323,7 +324,12 @@ export default function MatchPage() {
             </div>
           </div>
 
-          {myMmrAfter !== null && (
+          {isCasual ? (
+            <div className="glass rounded-xl p-4">
+              <div className="text-xs text-gray-500 uppercase tracking-wider mb-1">Casual Match</div>
+              <div className="text-sm text-gray-400">No MMR change</div>
+            </div>
+          ) : myMmrAfter !== null && (
             <div className="glass rounded-xl p-4">
               <div className="text-xs text-gray-500 uppercase tracking-wider mb-1">MMR Change</div>
               <div className="flex items-center justify-center gap-2">
@@ -341,7 +347,7 @@ export default function MatchPage() {
 
           <div className="flex flex-col sm:flex-row gap-2 pt-2">
             <button
-              onClick={() => router.push('/queue')}
+              onClick={() => router.push('/duel')}
               className="flex-1 py-3 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 rounded-xl font-medium transition-all hover:shadow-lg hover:shadow-blue-500/20"
             >
               Play Again
