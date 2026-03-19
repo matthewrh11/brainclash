@@ -25,12 +25,20 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // Check if in queue
+  // Check if in queue and update heartbeat
   const { data: queueEntry } = await supabase
     .from('matchmaking_queue')
     .select('*')
     .eq('user_id', user.id)
     .single();
+
+  // Touch heartbeat so the matchmaking tick knows this session is alive
+  if (queueEntry) {
+    await supabase
+      .from('matchmaking_queue')
+      .update({ last_heartbeat: new Date().toISOString() })
+      .eq('user_id', user.id);
+  }
 
   // Check if matched into an active game
   const { data: activeMatch } = await supabase

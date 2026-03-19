@@ -46,9 +46,9 @@ export default function QueuePage() {
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      // Component unmount (navigation away) — leave queue
+      // Component unmount (SPA navigation) — use sendBeacon since fetch gets cancelled
       if (queuedRef.current) {
-        fetch('/api/queue/leave', { method: 'DELETE' }).catch(() => {});
+        navigator.sendBeacon('/api/queue/leave');
         queuedRef.current = false;
       }
       cleanup();

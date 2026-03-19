@@ -6,12 +6,13 @@ import { NextResponse } from 'next/server';
 export async function POST() {
   const supabase = createServiceRoleClient();
 
-  // Purge stale queue entries (older than 5 minutes = likely dead sessions)
-  const staleThreshold = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+  // Purge ghost entries — no heartbeat in 15 seconds means the client is gone
+  // (status poll runs every 2s, so 15s gives plenty of margin)
+  const staleThreshold = new Date(Date.now() - 15 * 1000).toISOString();
   await supabase
     .from('matchmaking_queue')
     .delete()
-    .lt('queued_at', staleThreshold);
+    .lt('last_heartbeat', staleThreshold);
 
   // Auto-complete abandoned matches (active for more than 10 minutes)
   const abandonedThreshold = new Date(Date.now() - 10 * 60 * 1000).toISOString();
