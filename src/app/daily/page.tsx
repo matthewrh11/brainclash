@@ -202,7 +202,7 @@ export default function DailyPage() {
     ).join('');
 
     const today = new Date().toISOString().split('T')[0];
-    const text = `BrainClash Daily ${today}\n${result.score}/10 | ${formatTime(result.total_time_ms)}\n${grid}`;
+    const text = `BrainClash Daily ${today}\n${result.score}/10 | ${formatTime(result.total_time_ms)}\n${grid}\n\nPlay today's daily: https://brainclash.app/daily`;
 
     navigator.clipboard.writeText(text).then(() => {
       setShowCopied(true);
