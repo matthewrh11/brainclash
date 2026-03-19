@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import type { User } from '@/types/database';
 
 export default function HomePage() {
+  const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<{ id: string } | null>(null);
   const [profile, setProfile] = useState<User | null>(null);
   const [recentMatches, setRecentMatches] = useState<
@@ -16,26 +17,27 @@ export default function HomePage() {
 
   useEffect(() => {
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      setUser(authUser);
 
-      if (user) {
+      if (authUser) {
         const { data: prof } = await supabase
           .from('users')
           .select('*')
-          .eq('id', user.id)
+          .eq('id', authUser.id)
           .single();
         setProfile(prof as unknown as User);
 
         const { data: matches } = await supabase
           .from('matches')
           .select('id, p1_score, p2_score, winner_id, completed_at')
-          .or(`player_one_id.eq.${user.id},player_two_id.eq.${user.id}`)
+          .or(`player_one_id.eq.${authUser.id},player_two_id.eq.${authUser.id}`)
           .eq('status', 'completed')
           .order('completed_at', { ascending: false })
           .limit(5);
         setRecentMatches((matches ?? []) as typeof recentMatches);
       }
+      setLoading(false);
     }
     load();
   }, [supabase]);
@@ -44,7 +46,11 @@ export default function HomePage() {
     <div className="min-h-screen">
       <Navbar />
       <main className="max-w-4xl mx-auto px-4 py-6 sm:py-12">
-        {user && profile ? (
+        {loading ? (
+          <div className="flex items-center justify-center py-20">
+            <div className="w-10 h-10 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
+          </div>
+        ) : user && profile ? (
           <div className="space-y-6 sm:space-y-8 animate-fade-in-up">
             {/* Stats grid */}
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4 stagger-children">
