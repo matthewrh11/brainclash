@@ -34,11 +34,23 @@ export async function GET(
   });
 }
 
+// POST: cancel via sendBeacon (which only sends POST)
+export async function POST(
+  _request: Request,
+  { params }: { params: { code: string } }
+) {
+  return handleCancel(params.code);
+}
+
 // DELETE: host cancels the lobby
 export async function DELETE(
   _request: Request,
   { params }: { params: { code: string } }
 ) {
+  return handleCancel(params.code);
+}
+
+async function handleCancel(code: string) {
   const { createServerClient } = await import('@supabase/ssr');
   const { cookies } = await import('next/headers');
 
@@ -70,7 +82,7 @@ export async function DELETE(
   const { error } = await serviceSupabase
     .from('matches')
     .delete()
-    .eq('invite_code', params.code.toUpperCase())
+    .eq('invite_code', code.toUpperCase())
     .eq('player_one_id', user.id)
     .eq('status', 'waiting');
 

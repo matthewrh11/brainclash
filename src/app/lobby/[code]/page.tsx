@@ -17,6 +17,8 @@ export default function LobbyPage() {
   const [waitTime, setWaitTime] = useState(0);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const isHostRef = useRef(false);
+  const matchFoundRef = useRef(false);
 
   const cleanup = useCallback(() => {
     if (pollRef.current) clearInterval(pollRef.current);
@@ -63,6 +65,7 @@ export default function LobbyPage() {
         .single();
 
       if (match && match.player_one_id === user.id) {
+        isHostRef.current = true;
         setPhase('host-waiting');
         startHostPolling(data.matchId);
       } else {
@@ -71,7 +74,13 @@ export default function LobbyPage() {
     }
     load();
 
-    return () => cleanup();
+    return () => {
+      cleanup();
+      // If host navigates away without a match starting, cancel the lobby
+      if (isHostRef.current && !matchFoundRef.current) {
+        navigator.sendBeacon(`/api/lobby/${code}`);
+      }
+    };
   }, [code, supabase, router, cleanup]);
 
   function startHostPolling(matchId: string) {
@@ -87,6 +96,7 @@ export default function LobbyPage() {
         .single();
 
       if (match?.status === 'active' && match.player_two_id) {
+        matchFoundRef.current = true;
         cleanup();
         router.push(`/match/${matchId}`);
       }
@@ -114,6 +124,7 @@ export default function LobbyPage() {
 
   async function cancelLobby() {
     cleanup();
+    matchFoundRef.current = true; // Prevent beacon from also firing on unmount
     await fetch(`/api/lobby/${code}`, { method: 'DELETE' });
     router.push('/duel');
   }
