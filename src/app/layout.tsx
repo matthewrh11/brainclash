@@ -10,8 +10,29 @@ const geistSans = localFont({
 });
 
 export const metadata: Metadata = {
-  title: 'BrainClash',
-  description: 'Real-time 1v1 trivia with ranked matchmaking',
+  title: {
+    default: 'BrainClash — 1v1 Trivia with Ranked Matchmaking',
+    template: '%s | BrainClash',
+  },
+  description: 'Challenge friends or get matched in real-time 1v1 trivia battles. Answer fast, climb the Elo ranks, and compete in daily challenges. Free to play.',
+  keywords: ['trivia game', 'online trivia', '1v1 trivia', 'trivia battle', 'quiz game', 'multiplayer trivia', 'ranked trivia', 'daily trivia', 'trivia challenge', 'brain game', 'knowledge game'],
+  metadataBase: new URL('https://brainclash.vercel.app'),
+  openGraph: {
+    type: 'website',
+    siteName: 'BrainClash',
+    title: 'BrainClash — 1v1 Trivia with Ranked Matchmaking',
+    description: 'Challenge friends or get matched in real-time 1v1 trivia battles. Answer fast, climb the Elo ranks, and compete in daily challenges.',
+    url: 'https://brainclash.vercel.app',
+  },
+  twitter: {
+    card: 'summary',
+    title: 'BrainClash — 1v1 Trivia with Ranked Matchmaking',
+    description: 'Challenge friends or get matched in real-time 1v1 trivia battles. Answer fast, climb the ranks.',
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
   icons: {
     icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>",
   },
