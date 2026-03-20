@@ -3,6 +3,7 @@ import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { fetchQuestions } from '@/lib/opentdb';
 import { NextResponse } from 'next/server';
+import { waitUntil } from '@vercel/functions';
 
 function getTomorrowET(): string {
   const tomorrow = new Date();
@@ -106,25 +107,29 @@ export async function POST(request: Request) {
 
   // Pre-generate tomorrow's challenge in the background so the first
   // player of the next day doesn't have to wait for the OpenTDB fetch.
+  // Uses next/server `after` to keep the function alive after the response is sent.
   const tomorrow = getTomorrowET();
-  Promise.resolve(
-    serviceSupabase
-      .from('daily_challenges')
-      .select('id')
-      .eq('challenge_date', tomorrow)
-      .single()
-  ).then(async ({ data: existing }) => {
-    if (!existing) {
-      const questions = await fetchQuestions(10, null, 800, { ordered: true });
-      await serviceSupabase
+  waitUntil((async () => {
+    try {
+      const svc = createServiceRoleClient();
+      const { data: exists } = await svc
         .from('daily_challenges')
-        .insert({ challenge_date: tomorrow, questions })
-        .select()
+        .select('id')
+        .eq('challenge_date', tomorrow)
         .single();
+
+      if (!exists) {
+        const questions = await fetchQuestions(10, null, 800, { ordered: true });
+        await svc
+          .from('daily_challenges')
+          .insert({ challenge_date: tomorrow, questions })
+          .select()
+          .single();
+      }
+    } catch {
+      // Silent fail — tomorrow's challenge will be generated on-demand if this fails
     }
-  }).catch(() => {
-    // Silent fail — tomorrow's challenge will be generated on-demand if this fails
-  });
+  })());
 
   return NextResponse.json({
     result,
