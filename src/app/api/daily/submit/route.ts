@@ -1,7 +1,14 @@
 import { createServiceRoleClient } from '@/lib/supabase-server';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { fetchQuestions } from '@/lib/opentdb';
 import { NextResponse } from 'next/server';
+
+function getTomorrowET(): string {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  return tomorrow.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+}
 
 export async function POST(request: Request) {
   const cookieStore = cookies();
@@ -96,6 +103,28 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
+
+  // Pre-generate tomorrow's challenge in the background so the first
+  // player of the next day doesn't have to wait for the OpenTDB fetch.
+  const tomorrow = getTomorrowET();
+  serviceSupabase
+    .from('daily_challenges')
+    .select('id')
+    .eq('challenge_date', tomorrow)
+    .single()
+    .then(async ({ data: existing }) => {
+      if (!existing) {
+        const questions = await fetchQuestions(10, null, 800, { ordered: true });
+        await serviceSupabase
+          .from('daily_challenges')
+          .insert({ challenge_date: tomorrow, questions })
+          .select()
+          .single();
+      }
+    })
+    .catch(() => {
+      // Silent fail — tomorrow's challenge will be generated on-demand if this fails
+    });
 
   return NextResponse.json({
     result,
