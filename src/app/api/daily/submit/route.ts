@@ -29,7 +29,7 @@ export async function POST(request: Request) {
   const { challengeId, answers } = await request.json();
   // answers: Array<{ question_index: number, answer: string, time_ms: number }>
 
-  if (!challengeId || !answers || !Array.isArray(answers)) {
+  if (!challengeId || !answers || !Array.isArray(answers) || answers.length !== 10) {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
   }
 

@@ -33,20 +33,17 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // Refresh session
-  await supabase.auth.getUser();
+  // Refresh session and check auth (single call)
+  const { data: { user } } = await supabase.auth.getUser();
 
   // Protect routes that require auth
-  const protectedPaths = ['/queue', '/match'];
+  const protectedPaths = ['/queue', '/match', '/daily', '/duel', '/lobby'];
   const isProtected = protectedPaths.some((path) =>
     request.nextUrl.pathname.startsWith(path)
   );
 
-  if (isProtected) {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.redirect(new URL('/auth/login', request.url));
-    }
+  if (isProtected && !user) {
+    return NextResponse.redirect(new URL('/auth/login', request.url));
   }
 
   return response;

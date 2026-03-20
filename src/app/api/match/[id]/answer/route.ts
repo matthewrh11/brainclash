@@ -11,6 +11,10 @@ export async function POST(
   const matchId = params.id;
   const { answer, questionIndex } = await request.json();
 
+  if (typeof questionIndex !== 'number' || questionIndex < 0 || questionIndex >= 10) {
+    return NextResponse.json({ error: 'Invalid question index' }, { status: 400 });
+  }
+
   const cookieStore = cookies();
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
