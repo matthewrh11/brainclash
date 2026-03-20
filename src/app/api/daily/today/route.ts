@@ -6,8 +6,9 @@ import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
-function getTodayUTC(): string {
-  return new Date().toISOString().split('T')[0];
+function getTodayET(): string {
+  // Use Eastern Time as the daily rollover (midnight ET)
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 }
 
 export async function GET() {
@@ -34,7 +35,7 @@ export async function GET() {
   }
 
   const serviceSupabase = createServiceRoleClient();
-  const today = getTodayUTC();
+  const today = getTodayET();
 
   // Try to get today's challenge
   let { data: challenge } = await serviceSupabase

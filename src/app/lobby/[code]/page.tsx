@@ -120,7 +120,8 @@ export default function LobbyPage() {
 
   function copyLink() {
     const url = `${window.location.origin}/lobby/${code}`;
-    navigator.clipboard.writeText(url).then(() => {
+    const text = `Play me in BrainClash \u{1F9E0}\n${url}`;
+    navigator.clipboard.writeText(text).then(() => {
       setShowCopied(true);
       setTimeout(() => setShowCopied(false), 2000);
     });
