@@ -15,6 +15,10 @@ export async function POST(
     return NextResponse.json({ error: 'Invalid question index' }, { status: 400 });
   }
 
+  if (typeof answer !== 'string' || answer.length === 0 || answer.length > 500) {
+    return NextResponse.json({ error: 'Invalid answer' }, { status: 400 });
+  }
+
   const cookieStore = cookies();
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -69,7 +73,8 @@ export async function POST(
         { status: 409 }
       );
     }
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    console.error('Answer submission error:', error.message);
+    return NextResponse.json({ error: 'Failed to submit answer' }, { status: 400 });
   }
 
   // Check if match just completed

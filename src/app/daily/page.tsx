@@ -13,7 +13,7 @@ interface DailyQuestion extends OpenTDBQuestion {
 interface LeaderboardEntry {
   rank: number;
   username: string;
-  user_id: string;
+  isCurrentUser: boolean;
   score: number;
   total_time_ms: number;
 }
@@ -76,7 +76,7 @@ export default function DailyPage() {
         setFullQuestions(data.challenge.questions);
         setPhase('results');
         // Fetch leaderboard
-        const lbRes = await fetch(`/api/daily/leaderboard?challengeId=${data.challenge.id}`);
+        const lbRes = await fetch(`/api/daily/leaderboard?challengeId=${data.challenge.id}&userId=${user.id}`);
         const lbData = await lbRes.json();
         setLeaderboard(lbData.leaderboard ?? []);
       } else {
@@ -182,7 +182,7 @@ export default function DailyPage() {
       setTimeout(() => {
         setPhase('results');
         // Fetch leaderboard
-        fetch(`/api/daily/leaderboard?challengeId=${challengeId}`)
+        fetch(`/api/daily/leaderboard?challengeId=${challengeId}&userId=${currentUserId}`)
           .then((r) => r.json())
           .then((d) => setLeaderboard(d.leaderboard ?? []));
       }, 1500);
@@ -369,9 +369,9 @@ export default function DailyPage() {
               <div className="glass rounded-xl overflow-hidden">
                 {leaderboard.map((entry) => (
                   <div
-                    key={entry.user_id}
+                    key={entry.rank}
                     className={`flex items-center justify-between px-4 py-3 border-b border-gray-800 last:border-0 ${
-                      entry.user_id === currentUserId ? 'bg-purple-500/10' : ''
+                      entry.isCurrentUser ? 'bg-purple-500/10' : ''
                     }`}
                   >
                     <div className="flex items-center gap-3">
@@ -380,7 +380,7 @@ export default function DailyPage() {
                       }`}>
                         {entry.rank}
                       </span>
-                      <span className={`text-sm ${entry.user_id === currentUserId ? 'text-purple-300 font-semibold' : 'text-gray-300'}`}>
+                      <span className={`text-sm ${entry.isCurrentUser ? 'text-purple-300 font-semibold' : 'text-gray-300'}`}>
                         {entry.username}
                       </span>
                     </div>

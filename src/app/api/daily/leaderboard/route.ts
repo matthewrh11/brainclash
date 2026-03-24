@@ -7,6 +7,7 @@ export async function GET(request: Request) {
   const serviceSupabase = createServiceRoleClient();
   const { searchParams } = new URL(request.url);
   const challengeId = searchParams.get('challengeId');
+  const userId = searchParams.get('userId');
 
   if (!challengeId) {
     return NextResponse.json({ leaderboard: [] });
@@ -37,7 +38,7 @@ export async function GET(request: Request) {
   const leaderboard = results.map((r, i) => ({
     rank: i + 1,
     username: usernameMap.get(r.user_id) ?? 'Unknown',
-    user_id: r.user_id,
+    isCurrentUser: userId ? r.user_id === userId : false,
     score: r.score,
     total_time_ms: r.total_time_ms,
   }));

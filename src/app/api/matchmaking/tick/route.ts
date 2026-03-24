@@ -3,7 +3,13 @@ import { calculateElo, calculateEloDraw } from '@/lib/elo';
 import { fetchQuestions } from '@/lib/opentdb';
 import { NextResponse } from 'next/server';
 
-export async function POST() {
+export async function POST(request: Request) {
+  // Verify the request is from an authorized source (e.g., Vercel Cron)
+  const authHeader = request.headers.get('authorization');
+  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const supabase = createServiceRoleClient();
 
   // Purge ghost entries — no heartbeat in 15 seconds means the client is gone

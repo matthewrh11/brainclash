@@ -103,6 +103,44 @@ npm run lint     # Run ESLint
 
 ---
 
+## Security: Non-Negotiable Standards
+
+Every change must be evaluated through a security lens. These are not optional — they apply to all code written or modified.
+
+### Authentication & Authorization
+
+- Every API route that reads or writes user data MUST verify `getUser()`. No exceptions.
+- After auth, verify the user is authorized for the specific resource (e.g., a match participant, the lobby host). Auth != authz.
+- The `/api/matchmaking/tick` endpoint requires `CRON_SECRET` bearer token. Any new privileged/background endpoints must follow the same pattern.
+- RLS policies are defense-in-depth, not the only access control. API routes should also filter by user ID.
+
+### Input Validation (OWASP: Injection, Broken Access Control)
+
+- Validate ALL user input at the API boundary: type, length, range, format.
+- Answer strings: max 500 characters. Time values: `0 < time_ms <= 30000`. Question indices: `0 <= idx < 10`.
+- Never trust client-submitted IDs without verifying ownership or participation.
+- Use parameterized queries (Supabase SDK `.eq()`, `.in()`) — never string-interpolate user input into queries.
+
+### Data Exposure
+
+- Never return raw Supabase/database error messages to the client. Log server-side, return generic messages.
+- Never expose internal user IDs (`user_id` UUIDs) in public API responses. Use flags like `isCurrentUser` instead.
+- Strip sensitive fields (e.g., `correct_answer`) before returning data to the client where possible.
+- RLS policies must scope `SELECT` to the data owner or participant — never `USING (true)` on tables with sensitive data.
+
+### Secrets & Keys
+
+- `SUPABASE_SERVICE_ROLE_KEY` and `CRON_SECRET` are server-only. Never import `supabase-server.ts` in client components.
+- `NEXT_PUBLIC_*` vars are intentionally public. Everything else must stay server-side.
+- `.env.local` must remain in `.gitignore`. Never commit secrets.
+
+### Serverless Considerations
+
+- Fire-and-forget promises die when the Vercel function returns. Use `waitUntil` from `@vercel/functions` for background work.
+- Supabase query builder returns `PromiseLike`, not `Promise`. Wrap with `Promise.resolve()` if you need `.catch()`.
+
+---
+
 ## Reviewing Code: Peer Review Standards
 
 When asked to review code, act as a senior engineer conducting a thorough peer review. Apply these checks systematically.

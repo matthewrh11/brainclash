@@ -41,6 +41,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
   }
 
+  // Validate each answer entry
+  for (const a of answers) {
+    if (typeof a.question_index !== 'number' || a.question_index < 0 || a.question_index >= 10) {
+      return NextResponse.json({ error: 'Invalid question index' }, { status: 400 });
+    }
+    if (typeof a.answer !== 'string' || a.answer.length > 500) {
+      return NextResponse.json({ error: 'Invalid answer' }, { status: 400 });
+    }
+    if (typeof a.time_ms !== 'number' || a.time_ms <= 0 || a.time_ms > 30000) {
+      return NextResponse.json({ error: 'Invalid time value' }, { status: 400 });
+    }
+  }
+
   const serviceSupabase = createServiceRoleClient();
 
   // Get the challenge to verify answers
@@ -102,7 +115,8 @@ export async function POST(request: Request) {
     if (error.code === '23505') {
       return NextResponse.json({ error: 'Already completed today\'s daily' }, { status: 409 });
     }
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    console.error('Daily submit error:', error.message);
+    return NextResponse.json({ error: 'Failed to submit result' }, { status: 400 });
   }
 
   // Pre-generate tomorrow's challenge in the background so the first

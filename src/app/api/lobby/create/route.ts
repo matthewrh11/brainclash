@@ -89,7 +89,8 @@ export async function POST() {
       continue;
     }
 
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('Lobby create error:', error.message);
+    return NextResponse.json({ error: 'Failed to create lobby' }, { status: 500 });
   }
 
   return NextResponse.json({ error: 'Failed to generate unique code' }, { status: 500 });

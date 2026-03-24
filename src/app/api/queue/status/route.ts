@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
+import { waitUntil } from '@vercel/functions';
 
 export async function GET() {
   const cookieStore = cookies();
@@ -57,6 +58,14 @@ export async function GET() {
   }
 
   if (queueEntry) {
+    // Trigger matchmaking tick server-side in the background
+    waitUntil(
+      fetch(`${process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000'}/api/matchmaking/tick`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${process.env.CRON_SECRET}` },
+      }).catch(() => {})
+    );
+
     return NextResponse.json({
       status: 'queued',
       queuedAt: queueEntry.queued_at,

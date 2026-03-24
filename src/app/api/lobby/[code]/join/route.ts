@@ -93,7 +93,8 @@ export async function POST(
     .eq('status', 'waiting'); // Only if still waiting (prevents race)
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('Lobby join error:', error.message);
+    return NextResponse.json({ error: 'Failed to join lobby' }, { status: 500 });
   }
 
   return NextResponse.json({ matchId: match.id });

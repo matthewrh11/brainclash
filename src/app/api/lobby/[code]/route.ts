@@ -87,7 +87,8 @@ async function handleCancel(code: string) {
     .eq('status', 'waiting');
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('Lobby cancel error:', error.message);
+    return NextResponse.json({ error: 'Failed to cancel lobby' }, { status: 500 });
   }
 
   return NextResponse.json({ message: 'Lobby cancelled' });
