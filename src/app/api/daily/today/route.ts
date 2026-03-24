@@ -44,32 +44,40 @@ export async function GET() {
     .eq('challenge_date', today)
     .single();
 
-  // If no challenge exists for today, generate one
+  // If no challenge exists for today, generate one (retry up to 3 times)
   if (!challenge) {
-    // Daily mix: 6 easy, 3 medium, 1 hard — ordered easy→medium→hard
-    const questions = await fetchQuestions(10, null, 800, { ordered: true });
+    let lastError: unknown;
+    for (let attempt = 0; attempt < 3 && !challenge; attempt++) {
+      try {
+        // Daily mix: 6 easy, 3 medium, 1 hard — ordered easy→medium→hard
+        const questions = await fetchQuestions(10, null, 800, { ordered: true });
 
-    const { data: newChallenge, error } = await serviceSupabase
-      .from('daily_challenges')
-      .insert({ challenge_date: today, questions })
-      .select()
-      .single();
+        const { data: newChallenge, error } = await serviceSupabase
+          .from('daily_challenges')
+          .insert({ challenge_date: today, questions })
+          .select()
+          .single();
 
-    if (error) {
-      // Another request may have created it concurrently
-      const { data: existing } = await serviceSupabase
-        .from('daily_challenges')
-        .select('*')
-        .eq('challenge_date', today)
-        .single();
-      challenge = existing;
-    } else {
-      challenge = newChallenge;
+        if (error) {
+          // Another request may have created it concurrently
+          const { data: existing } = await serviceSupabase
+            .from('daily_challenges')
+            .select('*')
+            .eq('challenge_date', today)
+            .single();
+          challenge = existing;
+        } else {
+          challenge = newChallenge;
+        }
+      } catch (err) {
+        lastError = err;
+      }
     }
-  }
 
-  if (!challenge) {
-    return NextResponse.json({ error: 'Failed to load daily challenge' }, { status: 500 });
+    if (!challenge) {
+      console.error('Failed to generate daily challenge after 3 attempts:', lastError);
+      return NextResponse.json({ error: 'Failed to load daily challenge' }, { status: 500 });
+    }
   }
 
   // Check if user already completed today's daily

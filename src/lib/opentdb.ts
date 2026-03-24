@@ -84,22 +84,30 @@ async function fetchOne(
   difficulty: string,
   token?: string | null
 ): Promise<OpenTDBQuestion | null> {
-  const params = new URLSearchParams({
-    amount: '1',
-    type: 'multiple',
-    category: category.toString(),
-    difficulty,
-  });
-  if (token) params.set('token', token);
+  const attempts = difficulty === 'medium'
+    ? [difficulty]
+    : [difficulty, 'medium'];
 
-  try {
-    const res = await fetch(`https://opentdb.com/api.php?${params.toString()}`);
-    const data: OpenTDBResponse = await res.json();
-    if (data.response_code !== 0 || data.results.length === 0) return null;
-    return decodeQuestion(data.results[0]);
-  } catch {
-    return null;
+  for (const diff of attempts) {
+    const params = new URLSearchParams({
+      amount: '1',
+      type: 'multiple',
+      category: category.toString(),
+      difficulty: diff,
+    });
+    if (token) params.set('token', token);
+
+    try {
+      const res = await fetch(`https://opentdb.com/api.php?${params.toString()}`);
+      const data: OpenTDBResponse = await res.json();
+      if (data.response_code === 0 && data.results.length > 0) {
+        return decodeQuestion(data.results[0]);
+      }
+    } catch {
+      // try next difficulty
+    }
   }
+  return null;
 }
 
 /**
@@ -142,13 +150,10 @@ export async function fetchQuestions(
   // Collect successes
   let questions = results.filter((q): q is OpenTDBQuestion => q !== null);
 
-  // If some categories failed, backfill with unfiltered questions
-  if (questions.length < amount) {
+  // Backfill any failed category fetches with unfiltered questions
+  for (let attempt = 0; attempt < 3 && questions.length < amount; attempt++) {
     const needed = amount - questions.length;
-    const params = new URLSearchParams({
-      amount: needed.toString(),
-      type: 'multiple',
-    });
+    const params = new URLSearchParams({ amount: needed.toString(), type: 'multiple' });
     if (token) params.set('token', token);
 
     try {
@@ -158,12 +163,12 @@ export async function fetchQuestions(
         questions = [...questions, ...data.results.map(decodeQuestion)];
       }
     } catch {
-      // Use what we have
+      // try again
     }
   }
 
-  if (questions.length === 0) {
-    throw new Error('Failed to fetch any questions from OpenTDB');
+  if (questions.length < amount) {
+    throw new Error(`Failed to fetch ${amount} questions from OpenTDB (got ${questions.length})`);
   }
 
   // For ordered mode (daily), sort easy → medium → hard

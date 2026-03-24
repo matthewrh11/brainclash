@@ -37,13 +37,13 @@ export async function POST(request: Request) {
   const { challengeId, answers } = await request.json();
   // answers: Array<{ question_index: number, answer: string, time_ms: number }>
 
-  if (!challengeId || !answers || !Array.isArray(answers) || answers.length !== 10) {
+  if (!challengeId || !answers || !Array.isArray(answers) || answers.length < 1 || answers.length > 10) {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
   }
 
   // Validate each answer entry
   for (const a of answers) {
-    if (typeof a.question_index !== 'number' || a.question_index < 0 || a.question_index >= 10) {
+    if (typeof a.question_index !== 'number' || a.question_index < 0 || a.question_index >= answers.length) {
       return NextResponse.json({ error: 'Invalid question index' }, { status: 400 });
     }
     if (typeof a.answer !== 'string' || a.answer.length > 500) {
@@ -65,6 +65,11 @@ export async function POST(request: Request) {
 
   if (!challenge) {
     return NextResponse.json({ error: 'Challenge not found' }, { status: 404 });
+  }
+
+  const questionCount = (challenge.questions as unknown[]).length;
+  if (answers.length !== questionCount) {
+    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
   }
 
   // Check if user already submitted

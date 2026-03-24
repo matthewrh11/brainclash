@@ -6,7 +6,8 @@
       "Bash(npm install @supabase/supabase-js @supabase/ssr)",
       "Bash(npx next build)",
       "Bash(npx tsc --noEmit)",
-      "Bash(npx tsc --noEmit --pretty)"
+      "Bash(npx tsc --noEmit --pretty)",
+      "Bash(npm run build)"
     ]
   }
 }
