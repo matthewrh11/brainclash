@@ -108,73 +108,69 @@ export async function fetchQuestions(
   avgMMR?: number,
   options?: { ordered?: boolean }
 ): Promise<OpenTDBQuestion[]> {
-  const DIFFICULTIES = ['easy', 'medium', 'hard'] as const;
+  // Shuffle all categories. First `amount` get primary slots; remainder are per-category fallbacks.
+  const shuffledCategories = shuffle(CATEGORIES);
+  const primaryCats = shuffledCategories.slice(0, amount);
+  const fallbackCats = shuffledCategories.slice(amount);
 
-  // Fetch one question per (category × difficulty) in parallel — 42 total
-  // This builds a rich pool we draw from, guaranteeing category diversity
-  const combos = CATEGORIES.flatMap(cat =>
-    DIFFICULTIES.map(diff => ({ cat, diff }))
-  );
-  const raw = await Promise.all(
-    combos.map(({ cat, diff }) => fetchOne(cat, diff, token))
-  );
-
-  // Organise into per-difficulty pools, keyed by category to prevent repeats
-  const pool: Record<string, Map<number, OpenTDBQuestion>> = {
-    easy: new Map(), medium: new Map(), hard: new Map(),
-  };
-  combos.forEach(({ cat, diff }, i) => {
-    const q = raw[i];
-    if (q && !pool[diff].has(cat)) pool[diff].set(cat, q);
-  });
-
-  // Determine how many of each difficulty we need
+  // Build difficulty assignment for the primary slots
   const mix = avgMMR !== undefined
     ? getDifficultyMix(avgMMR)
     : { easy: 0, medium: amount, hard: 0 };
+  const diffSlots = options?.ordered
+    ? [...Array(mix.easy).fill('easy'), ...Array(mix.medium).fill('medium'), ...Array(mix.hard).fill('hard')]
+    : shuffle([...Array(mix.easy).fill('easy'), ...Array(mix.medium).fill('medium'), ...Array(mix.hard).fill('hard')]);
+  while (diffSlots.length < amount) diffSlots.push('medium');
 
-  // Convert maps to arrays for easier manipulation
-  const poolArrays: Record<string, { cat: number; q: OpenTDBQuestion }[]> = {};
-  for (const diff of ['easy', 'medium', 'hard']) {
-    poolArrays[diff] = Array.from(pool[diff], ([cat, q]) => ({ cat, q }));
-  }
+  // Fetch primary slots in parallel (one request per category)
+  const primaryResults = await Promise.all(
+    primaryCats.map((cat, i) => fetchOne(cat, diffSlots[i], token))
+  );
 
-  // Pick questions from each pool, ensuring no category is used twice
-  const usedCategories = new Set<number>();
-  const selected: OpenTDBQuestion[] = [];
+  const questions: OpenTDBQuestion[] = [];
+  const failedSlots: number[] = []; // indices into diffSlots that need a replacement
 
-  for (const [diff, needed] of [['easy', mix.easy], ['medium', mix.medium], ['hard', mix.hard]] as [string, number][]) {
-    const available = shuffle(poolArrays[diff]).filter(({ cat }) => !usedCategories.has(cat));
-    available.slice(0, needed).forEach(({ cat, q }) => {
-      usedCategories.add(cat);
-      selected.push(q);
-    });
-  }
+  primaryResults.forEach((q, i) => {
+    if (q) { questions.push(q); }
+    else { failedSlots.push(i); }
+  });
 
-  // If any difficulty tier was short, fill from leftover pool entries
-  if (selected.length < amount) {
-    const leftover = shuffle(
-      [...poolArrays.easy, ...poolArrays.medium, ...poolArrays.hard]
-        .filter(({ cat }) => !usedCategories.has(cat))
+  // Replace failures with per-category fallbacks (preserving difficulty where possible)
+  if (failedSlots.length > 0 && fallbackCats.length > 0) {
+    const fallbackResults = await Promise.all(
+      failedSlots.map((slotIdx, fi) => {
+        const cat = fallbackCats[fi];
+        return cat ? fetchOne(cat, diffSlots[slotIdx], token) : Promise.resolve(null);
+      })
     );
-    leftover.slice(0, amount - selected.length).forEach(({ cat, q }) => {
-      usedCategories.add(cat);
-      selected.push(q);
-    });
+    fallbackResults.forEach(q => { if (q) questions.push(q); });
   }
 
-  if (selected.length < amount) {
-    throw new Error(`Failed to fetch ${amount} questions from OpenTDB (got ${selected.length})`);
+  // Last resort: unfiltered batch for anything still missing
+  for (let attempt = 0; attempt < 3 && questions.length < amount; attempt++) {
+    if (attempt > 0) await new Promise(r => setTimeout(r, 2000));
+    const needed = amount - questions.length;
+    const params = new URLSearchParams({ amount: needed.toString(), type: 'multiple' });
+    if (token) params.set('token', token);
+    try {
+      const res = await fetch(`https://opentdb.com/api.php?${params.toString()}`);
+      const data: OpenTDBResponse = await res.json();
+      if (data.response_code === 0) {
+        questions.push(...data.results.map(decodeQuestion));
+      }
+    } catch { /* try again */ }
+  }
+
+  if (questions.length < amount) {
+    throw new Error(`Failed to fetch ${amount} questions from OpenTDB (got ${questions.length})`);
   }
 
   if (options?.ordered) {
     const order: Record<string, number> = { easy: 0, medium: 1, hard: 2 };
-    selected.sort((a, b) => (order[a.difficulty] ?? 1) - (order[b.difficulty] ?? 1));
-  } else {
-    selected.sort(() => Math.random() - 0.5);
+    questions.sort((a, b) => (order[a.difficulty] ?? 1) - (order[b.difficulty] ?? 1));
   }
 
-  return selected.slice(0, amount);
+  return questions.slice(0, amount);
 }
 
 export async function requestSessionToken(): Promise<string> {
