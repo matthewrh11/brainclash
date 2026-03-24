@@ -84,46 +84,23 @@ async function fetchOne(
   difficulty: string,
   token?: string | null
 ): Promise<OpenTDBQuestion | null> {
-  const attempts = difficulty === 'medium'
-    ? [difficulty]
-    : [difficulty, 'medium'];
-
-  for (const diff of attempts) {
-    const params = new URLSearchParams({
-      amount: '1',
-      type: 'multiple',
-      category: category.toString(),
-      difficulty: diff,
-    });
-    if (token) params.set('token', token);
-
-    try {
-      const res = await fetch(`https://opentdb.com/api.php?${params.toString()}`);
-      const data: OpenTDBResponse = await res.json();
-      if (data.response_code === 0 && data.results.length > 0) {
-        return decodeQuestion(data.results[0]);
-      }
-    } catch {
-      // try next difficulty
+  const params = new URLSearchParams({
+    amount: '1',
+    type: 'multiple',
+    category: category.toString(),
+    difficulty,
+  });
+  if (token) params.set('token', token);
+  try {
+    const res = await fetch(`https://opentdb.com/api.php?${params.toString()}`);
+    const data: OpenTDBResponse = await res.json();
+    if (data.response_code === 0 && data.results.length > 0) {
+      return decodeQuestion(data.results[0]);
     }
-  }
+  } catch {}
   return null;
 }
 
-/**
- * Builds a difficulty list from the MMR mix, e.g. [easy, easy, easy, easy, medium, medium, medium, hard, hard, hard]
- */
-function buildDifficultySlots(avgMMR: number, count: number): string[] {
-  const mix = getDifficultyMix(avgMMR);
-  const slots: string[] = [
-    ...Array(mix.easy).fill('easy'),
-    ...Array(mix.medium).fill('medium'),
-    ...Array(mix.hard).fill('hard'),
-  ];
-  // Trim or pad to exact count
-  while (slots.length < count) slots.push('medium');
-  return slots.slice(0, count);
-}
 
 export async function fetchQuestions(
   amount: number = 10,
@@ -131,54 +108,73 @@ export async function fetchQuestions(
   avgMMR?: number,
   options?: { ordered?: boolean }
 ): Promise<OpenTDBQuestion[]> {
-  // Pick `amount` random categories (one question per category)
-  const pickedCategories = shuffle(CATEGORIES).slice(0, amount);
+  const DIFFICULTIES = ['easy', 'medium', 'hard'] as const;
 
-  // Assign a difficulty to each slot based on MMR
-  const difficulties = avgMMR !== undefined
-    ? buildDifficultySlots(avgMMR, amount)
-    : Array(amount).fill('medium') as string[];
-
-  // Shuffle difficulties so they're not grouped by difficulty
-  const shuffledDifficulties = options?.ordered ? difficulties : shuffle(difficulties);
-
-  // Fetch one question per category+difficulty in parallel
-  const results = await Promise.all(
-    pickedCategories.map((cat, i) => fetchOne(cat, shuffledDifficulties[i], token))
+  // Fetch one question per (category × difficulty) in parallel — 42 total
+  // This builds a rich pool we draw from, guaranteeing category diversity
+  const combos = CATEGORIES.flatMap(cat =>
+    DIFFICULTIES.map(diff => ({ cat, diff }))
+  );
+  const raw = await Promise.all(
+    combos.map(({ cat, diff }) => fetchOne(cat, diff, token))
   );
 
-  // Collect successes
-  let questions = results.filter((q): q is OpenTDBQuestion => q !== null);
+  // Organise into per-difficulty pools, keyed by category to prevent repeats
+  const pool: Record<string, Map<number, OpenTDBQuestion>> = {
+    easy: new Map(), medium: new Map(), hard: new Map(),
+  };
+  combos.forEach(({ cat, diff }, i) => {
+    const q = raw[i];
+    if (q && !pool[diff].has(cat)) pool[diff].set(cat, q);
+  });
 
-  // Backfill any failed category fetches with unfiltered questions
-  for (let attempt = 0; attempt < 3 && questions.length < amount; attempt++) {
-    if (attempt > 0) await new Promise(r => setTimeout(r, 2000));
-    const needed = amount - questions.length;
-    const params = new URLSearchParams({ amount: needed.toString(), type: 'multiple' });
-    if (token) params.set('token', token);
+  // Determine how many of each difficulty we need
+  const mix = avgMMR !== undefined
+    ? getDifficultyMix(avgMMR)
+    : { easy: 0, medium: amount, hard: 0 };
 
-    try {
-      const res = await fetch(`https://opentdb.com/api.php?${params.toString()}`);
-      const data: OpenTDBResponse = await res.json();
-      if (data.response_code === 0) {
-        questions = [...questions, ...data.results.map(decodeQuestion)];
-      }
-    } catch {
-      // try again
-    }
+  // Convert maps to arrays for easier manipulation
+  const poolArrays: Record<string, { cat: number; q: OpenTDBQuestion }[]> = {};
+  for (const diff of ['easy', 'medium', 'hard']) {
+    poolArrays[diff] = Array.from(pool[diff], ([cat, q]) => ({ cat, q }));
   }
 
-  if (questions.length < amount) {
-    throw new Error(`Failed to fetch ${amount} questions from OpenTDB (got ${questions.length})`);
+  // Pick questions from each pool, ensuring no category is used twice
+  const usedCategories = new Set<number>();
+  const selected: OpenTDBQuestion[] = [];
+
+  for (const [diff, needed] of [['easy', mix.easy], ['medium', mix.medium], ['hard', mix.hard]] as [string, number][]) {
+    const available = shuffle(poolArrays[diff]).filter(({ cat }) => !usedCategories.has(cat));
+    available.slice(0, needed).forEach(({ cat, q }) => {
+      usedCategories.add(cat);
+      selected.push(q);
+    });
   }
 
-  // For ordered mode (daily), sort easy → medium → hard
+  // If any difficulty tier was short, fill from leftover pool entries
+  if (selected.length < amount) {
+    const leftover = shuffle(
+      [...poolArrays.easy, ...poolArrays.medium, ...poolArrays.hard]
+        .filter(({ cat }) => !usedCategories.has(cat))
+    );
+    leftover.slice(0, amount - selected.length).forEach(({ cat, q }) => {
+      usedCategories.add(cat);
+      selected.push(q);
+    });
+  }
+
+  if (selected.length < amount) {
+    throw new Error(`Failed to fetch ${amount} questions from OpenTDB (got ${selected.length})`);
+  }
+
   if (options?.ordered) {
     const order: Record<string, number> = { easy: 0, medium: 1, hard: 2 };
-    questions.sort((a, b) => (order[a.difficulty] ?? 1) - (order[b.difficulty] ?? 1));
+    selected.sort((a, b) => (order[a.difficulty] ?? 1) - (order[b.difficulty] ?? 1));
+  } else {
+    selected.sort(() => Math.random() - 0.5);
   }
 
-  return questions.slice(0, amount);
+  return selected.slice(0, amount);
 }
 
 export async function requestSessionToken(): Promise<string> {
