@@ -48,6 +48,7 @@ export async function GET() {
   if (!challenge) {
     let lastError: unknown;
     for (let attempt = 0; attempt < 3 && !challenge; attempt++) {
+      if (attempt > 0) await new Promise(r => setTimeout(r, 3000));
       try {
         // Daily mix: 6 easy, 3 medium, 1 hard — ordered easy→medium→hard
         const questions = await fetchQuestions(10, null, 800, { ordered: true });

@@ -152,6 +152,7 @@ export async function fetchQuestions(
 
   // Backfill any failed category fetches with unfiltered questions
   for (let attempt = 0; attempt < 3 && questions.length < amount; attempt++) {
+    if (attempt > 0) await new Promise(r => setTimeout(r, 2000));
     const needed = amount - questions.length;
     const params = new URLSearchParams({ amount: needed.toString(), type: 'multiple' });
     if (token) params.set('token', token);
